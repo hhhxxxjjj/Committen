@@ -94,6 +94,98 @@ body.cat-flipped .cat-sprite-pacer {
   100% { transform: scale(var(--display-scale)) translateY(0); opacity: 1; }
 }
 
+/* ==================== v0.2.1:脚下阴影 ====================
+   贴在 sprite 底部的软椭圆,跟 idle/walk 节奏轻微脉动,
+   给 procedural pet 加"重量感"。对 default cat 也开,顺势加点立体。 */
+.cat-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 4px;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  animation: cat-shadow-pulse 1.2s ease-in-out infinite alternate;
+}
+
+/* walk 时阴影切到"脚步压地"节奏(0.6s,跟 procedural walk squash 同步)。
+   用 body[data-cat-state] 而非 sprite 子级选择器,因为 .cat-shadow 是
+   .cat-sprite-wrapper 的兄弟,sprite 上的状态类够不到它。 */
+body[data-cat-state="walk"] .cat-shadow {
+  animation: cat-shadow-walk 0.6s ease-in-out infinite;
+}
+
+@keyframes cat-shadow-pulse {
+  from { transform: translateX(-50%) scaleX(0.90); opacity: 0.7; }
+  to   { transform: translateX(-50%) scaleX(1.00); opacity: 1.0; }
+}
+
+@keyframes cat-shadow-walk {
+  0%   { transform: translateX(-50%) scaleX(0.95); opacity: 0.85; }
+  25%  { transform: translateX(-50%) scaleX(0.78); opacity: 0.55; }
+  50%  { transform: translateX(-50%) scaleX(0.95); opacity: 0.85; }
+  75%  { transform: translateX(-50%) scaleX(1.05); opacity: 1.00; }
+  100% { transform: translateX(-50%) scaleX(0.95); opacity: 0.85; }
+}
+
+/* ==================== v0.2.1:eat 食物 emoji popup ====================
+   每次进入 eat 状态(= 每次 git commit)弹一个 🍣 / 🍪 / … 上去再淡出,
+   主要用于补 procedural pet 的"吃"几乎没动画的弱点。default cat 用也无伤大雅。 */
+.cat-food-popup {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  font-size: 18px;
+  pointer-events: none;
+  animation: cat-food-fly 1.4s ease-out forwards;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  /* --off-x 由 JS 给每次 popup 注入一个 ±15px 的随机水平偏移 */
+}
+
+@keyframes cat-food-fly {
+  0%   { opacity: 0; transform: translate(calc(-50% + var(--off-x, 0px)), 8px) scale(0.6); }
+  20%  { opacity: 1; transform: translate(calc(-50% + var(--off-x, 0px)), -6px) scale(1.2); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--off-x, 0px)), -44px) scale(0.9); }
+}
+
+/* ==================== v0.2.1:attack 爪痕 fx ====================
+   进入 attack 状态时在 sprite 上叠 3 道斜向白光(像 manga 的 swipe 线),
+   给 procedural attack 一个明显的"扑爪"反馈。 */
+.cat-attack-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.cat-attack-fx::before,
+.cat-attack-fx::after,
+.cat-attack-fx > span {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.9), transparent);
+  transform-origin: center;
+  border-radius: 2px;
+  opacity: 0;
+  animation: cat-claw-swipe 0.5s ease-out forwards;
+}
+
+.cat-attack-fx::before { top: 28%; transform: rotate(-18deg); animation-delay: 0s; }
+.cat-attack-fx::after  { top: 50%; transform: rotate(-18deg); animation-delay: 0.07s; }
+.cat-attack-fx > span  { top: 72%; transform: rotate(-18deg); animation-delay: 0.14s; }
+
+@keyframes cat-claw-swipe {
+  0%   { opacity: 0; transform: rotate(-18deg) translateX(-60%) scaleX(0.3); }
+  40%  { opacity: 1; transform: rotate(-18deg) translateX(0)    scaleX(1.0); }
+  100% { opacity: 0; transform: rotate(-18deg) translateX(50%)  scaleX(0.8); }
+}
+
 /* ==================== 饱腹感血条 ==================== */
 .cat-hunger {
   position: absolute;

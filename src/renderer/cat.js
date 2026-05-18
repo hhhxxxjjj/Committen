@@ -29,8 +29,39 @@
     if (name === currentState) return;
     sprite.classList.remove(`cat-sprite--${currentState}`);
     sprite.classList.add(`cat-sprite--${name}`);
+    // v0.2.1:把当前状态写到 body[data-cat-state] 上,供 .cat-shadow 这种
+    // 非 sprite 子节点的 selector 用(sprite 的兄弟选择器够不到)
+    document.body.dataset.catState = name;
     currentState = name;
     console.log('[Committen] state →', name);
+
+    // 进入 eat / attack 时触发对应的 fx 元素(每次进入只弹一次)
+    if (name === 'eat') spawnFoodPopup();
+    else if (name === 'attack') spawnAttackFx();
+  }
+
+  // v0.2.1:食物 emoji popup — 每次进 eat 弹一个,1.4s 后自清理
+  const FOOD_EMOJIS = ['🍣', '🍪', '🥩', '🍰', '🍤', '🐟', '🧀', '🍙', '🥟', '🍡'];
+  function spawnFoodPopup() {
+    const wrapper = sprite?.closest('.cat-sprite-wrapper');
+    if (!wrapper) return;
+    const popup = document.createElement('div');
+    popup.className = 'cat-food-popup';
+    popup.textContent = FOOD_EMOJIS[Math.floor(Math.random() * FOOD_EMOJIS.length)];
+    popup.style.setProperty('--off-x', `${Math.round((Math.random() - 0.5) * 30)}px`);
+    wrapper.appendChild(popup);
+    setTimeout(() => popup.remove(), 1500);
+  }
+
+  // v0.2.1:attack 爪痕 — 3 道斜向白光(::before + ::after + <span>),0.5s 自清理
+  function spawnAttackFx() {
+    const wrapper = sprite?.closest('.cat-sprite-wrapper');
+    if (!wrapper) return;
+    const fx = document.createElement('div');
+    fx.className = 'cat-attack-fx';
+    fx.appendChild(document.createElement('span'));
+    wrapper.appendChild(fx);
+    setTimeout(() => fx.remove(), 650);
   }
 
   // ============ Pack 注入 ============
@@ -106,9 +137,16 @@
       decl('idle', `${kf('breath')} 1.2s ease-in-out infinite alternate`),
       `@keyframes ${kf('breath')} {\n  from { transform: scale(0.98); }\n  to   { transform: scale(1.00); }\n}`,
 
-      // walk:Y bobbing(X 位移由主进程驱动整个窗口,不在这里加)
-      decl('walk', `${kf('walk-bob')} 0.5s ease-in-out infinite alternate`),
-      `@keyframes ${kf('walk-bob')} {\n  from { transform: translateY(0); }\n  to   { transform: translateY(-3px); }\n}`,
+      // walk:squash + stretch(v0.2.1)— 起跳时拉长,落地时压扁,比纯 Y bob 有"步态"
+      // transform-origin: bottom center 让 squash 从脚部压上来
+      decl('walk', `${kf('walk')} 0.6s ease-in-out infinite`, `  transform-origin: bottom center;\n`),
+      `@keyframes ${kf('walk')} {\n` +
+      `  0%   { transform: translateY(0)    scale(1.00, 1.00); }\n` +
+      `  25%  { transform: translateY(-3px) scale(0.96, 1.04); }\n` +
+      `  50%  { transform: translateY(0)    scale(1.00, 1.00); }\n` +
+      `  75%  { transform: translateY(0)    scale(1.06, 0.96); }\n` +
+      `  100% { transform: translateY(0)    scale(1.00, 1.00); }\n` +
+      `}`,
 
       // sleep:倾斜 + 慢脉动
       decl('sleep', `${kf('sleep')} 1.6s ease-in-out infinite alternate`, `  transform-origin: bottom center;\n`),
