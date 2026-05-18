@@ -1,0 +1,167 @@
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  margin: 0;
+  padding: 24px;
+  background: #1a1a1a;
+  color: #eee;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.subtitle {
+  margin: 0 0 20px;
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.subtitle code {
+  background: #2a2a2a;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.panel {
+  background: #232323;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  opacity: 0.55;
+}
+
+.drop-zone {
+  border: 2px dashed #555;
+  border-radius: 8px;
+  padding: 32px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.drop-zone:hover,
+.drop-zone.hover {
+  border-color: #8af;
+  background: rgba(136, 170, 255, 0.06);
+}
+
+.drop-zone p {
+  margin: 4px 0;
+}
+
+.drop-zone .hint {
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+canvas {
+  display: block;
+  margin: 16px auto 0;
+  max-width: 100%;
+  background:
+    linear-gradient(45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(-45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a2a2a 75%),
+    linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.output-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.output-actions button {
+  background: #2e2e2e;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.output-actions button:hover:not(:disabled) {
+  background: #3a3a3a;
+  border-color: #8af;
+}
+
+.output-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.output-actions .hint {
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+.controls {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #333;
+}
+
+.control {
+  display: grid;
+  grid-template-columns: 80px 1fr 36px;
+  align-items: center;
+  gap: 10px;
+}
+
+.control label {
+  font-size: 13px;
+}
+
+.control input[type=range] {
+  width: 100%;
+  accent-color: #8af;
+}
+
+.control .val {
+  font-size: 12px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  opacity: 0.8;
+  text-align: right;
+}
+
+#status {
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: #222;
+  border: 1px solid #2e2e2e;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  min-height: 38px;
+  max-width: 1100px;
+}

@@ -35,3 +35,8 @@ ezgif.com-*
 
 # 项目内部 roadmap / 想法 backlog,不公开
 IDEAS.md
+
+# v0.2 Pet Hatch POC 的本地保存输出(文件名格式 *_pxN_palN_olN.png)
+# 评估证据钉在 poc/TEST_RESULTS.md 文字里,PNG 不入库
+/*_px*_pal*_ol*.png
+

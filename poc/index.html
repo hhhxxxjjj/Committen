@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Committen v0.2 — Pet Hatch POC</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <h1>Committen v0.2 — Pet Hatch P0 POC</h1>
+  <p class="subtitle">
+    Drop a photo → background removal (<code>@imgly</code>) → canvas pixelization → eyeball quality.
+    First run downloads ~50MB ONNX model (cached).
+  </p>
+
+  <div class="container">
+    <section class="panel">
+      <h2>Input</h2>
+      <div id="drop-zone" class="drop-zone">
+        <p><strong>Drop image here</strong></p>
+        <p class="hint">or click to choose (PNG / JPG)</p>
+        <input type="file" id="file-input" accept="image/*" hidden />
+      </div>
+      <canvas id="original" width="256" height="256"></canvas>
+    </section>
+
+    <section class="panel">
+      <h2>Pixelized output</h2>
+      <canvas id="output" width="192" height="192"></canvas>
+      <div class="output-actions">
+        <button id="save-png" type="button" disabled>Save PNG</button>
+        <span class="hint">saves current preview at display resolution</span>
+      </div>
+      <div class="controls">
+        <div class="control">
+          <label for="pixel-size">Pixel size</label>
+          <input type="range" id="pixel-size" min="32" max="96" step="16" value="64" />
+          <span id="pixel-size-val" class="val">64</span>
+        </div>
+        <div class="control">
+          <label for="palette-size">Palette</label>
+          <input type="range" id="palette-size" min="4" max="32" step="4" value="16" />
+          <span id="palette-size-val" class="val">16</span>
+        </div>
+        <div class="control">
+          <label for="outline">Outline</label>
+          <input type="range" id="outline" min="0" max="2" step="1" value="0" />
+          <span id="outline-val" class="val">0</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="status">Idle. Drop a photo to start.</div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
