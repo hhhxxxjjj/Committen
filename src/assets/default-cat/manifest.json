@@ -1,0 +1,16 @@
+{
+  "id": "default-cat",
+  "displayName": "Default Cat",
+  "version": "1.0",
+  "type": "multi-frame",
+  "frameSize": { "w": 80, "h": 64 },
+  "displayScale": 2.4,
+  "defaultFacing": "left",
+  "states": {
+    "idle":   { "image": "idle.png",   "frames": 8,  "duration": "1.0s" },
+    "walk":   { "image": "walk.png",   "frames": 12, "duration": "0.9s" },
+    "eat":    { "image": "eat.png",    "frames": 7,  "duration": "0.7s" },
+    "sleep":  { "image": "sleep.png",  "frames": 8,  "duration": "1.6s" },
+    "attack": { "image": "attack.png", "frames": 8,  "duration": "0.55s" }
+  }
+}

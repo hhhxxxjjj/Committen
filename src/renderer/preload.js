@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('committen', {
     ipcRenderer.on('cat:set-state', (_e, state) => callback(state));
   },
 
+  // 主进程下发当前 pet pack(manifest + 每状态的图片 URL)
+  // v0.2 P1:由 sprite-pack-loader 解析,renderer 据此动态生成 sprite CSS
+  onPack: (callback) => {
+    ipcRenderer.on('cat:pack', (_e, pack) => callback(pack));
+  },
+
   // 主进程推送饱腹感数值(0-100)
   onHunger: (callback) => {
     ipcRenderer.on('cat:hunger', (_e, value) => callback(value));

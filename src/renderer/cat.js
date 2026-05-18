@@ -1,5 +1,6 @@
 // Committen renderer
 // v0.1.2: 单 ⚙ 按钮 + 弹出菜单(Reset / Open config / Quit)
+// v0.2 P1: sprite-pack 抽象 — 等主进程下发 pack 后再注入 CSS 并启动入场动画
 
 (function () {
   const sprite = document.getElementById('catSprite');
@@ -16,6 +17,7 @@
   // ============ 状态机(sprite) ============
   const STATES = ['idle', 'walk', 'eat', 'sleep', 'attack'];
   let currentState = 'idle';
+  let activePack = null;
 
   function setState(name) {
     if (!STATES.includes(name)) {
@@ -28,6 +30,63 @@
     currentState = name;
     console.log('[Committen] state →', name);
   }
+
+  // ============ Pack 注入 ============
+  function injectPackStyles(pack) {
+    const { manifest, imageUrls } = pack;
+    const { frameSize, displayScale, type, states } = manifest;
+
+    const root = document.documentElement;
+    root.style.setProperty('--frame-w', `${frameSize.w}px`);
+    root.style.setProperty('--frame-h', `${frameSize.h}px`);
+    if (Number.isFinite(displayScale)) {
+      root.style.setProperty('--display-scale', String(displayScale));
+    }
+
+    if (type !== 'multi-frame') {
+      // P2 会接 procedural 渲染。P1 只支持 multi-frame(default-cat 走这条)
+      console.warn('[Committen] pack type', type, 'not yet rendered (P2)');
+      return;
+    }
+
+    const parts = [];
+    for (const state of STATES) {
+      const s = states[state];
+      if (!s) continue;
+      const url = imageUrls[state];
+      const totalOffsetPx = s.frames * frameSize.w;
+      const kfName = `sprite-${state}-${manifest.id}`;
+      parts.push(
+        `.cat-sprite--${state} {\n` +
+        `  background-image: url("${url}");\n` +
+        `  animation: ${kfName} ${s.duration} steps(${s.frames}) infinite;\n` +
+        `}\n` +
+        `@keyframes ${kfName} {\n` +
+        `  from { background-position: 0 0; }\n` +
+        `  to   { background-position: -${totalOffsetPx}px 0; }\n` +
+        `}`
+      );
+    }
+
+    let styleEl = document.getElementById('cat-pack-styles');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'cat-pack-styles';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = parts.join('\n\n');
+    console.log(`[Committen] pack loaded: ${manifest.displayName} (${manifest.id})`);
+  }
+
+  window.committen.onPack((pack) => {
+    activePack = pack;
+    injectPackStyles(pack);
+    // 注入后再次应用 currentState,确保 background-image 立刻生效
+    sprite.classList.add(`cat-sprite--${currentState}`);
+    // 入场动画延迟到 pack 就位后再播,避免"空 sprite 弹一下又出图"的瞬闪
+    document.body.classList.add('cat--intro');
+    setTimeout(() => document.body.classList.remove('cat--intro'), 5000);
+  });
 
   // 主进程通知方向变化(走到边缘要转身)
   // dir = 1 表示向右,-1 表示向左
@@ -89,8 +148,7 @@
   };
 
   // ============ 首次启动 ============
-  document.body.classList.add('cat--intro');
-  setTimeout(() => document.body.classList.remove('cat--intro'), 5000);
+  // (入场动画移到 onPack 回调里,等 pack 注入后再播)
 
   // ============ 菜单交互 ============
   function openMenu() {

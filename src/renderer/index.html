@@ -19,7 +19,9 @@
 
     <div class="cat-sprite-wrapper">
       <div class="cat-sprite-pacer">
-        <div class="cat-sprite cat-sprite--idle" id="catSprite"></div>
+        <!-- sprite 状态类(cat-sprite--idle 等)由 cat.js 在 onPack 后挂上,
+             避免在 pack 到达前出现"无图但已动画"的状态。 -->
+        <div class="cat-sprite" id="catSprite"></div>
       </div>
     </div>
     <div class="cat-hint" id="catHint">Drag to move · ⚙ for actions</div>

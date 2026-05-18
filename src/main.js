@@ -8,6 +8,7 @@ const fs = require('fs');
 const WindowMonitor = require('./monitor/window-monitor');
 const GitWatcher = require('./monitor/git-watcher');
 const HungerSystem = require('./core/hunger-system');
+const { loadPack } = require('./core/sprite-pack-loader');
 const { minimizeByHwnd } = require('./monitor/minimize');
 
 // 小猫窗口尺寸(像素)
@@ -30,6 +31,7 @@ let gitWatchers = []; // GitWatcher 实例数组(支持多 repo)
 let hunger = null;    // HungerSystem 实例
 let decayTimer = null; // 每分钟 -1 的定时器
 let appConfig = null; // 加载后的配置
+let activePack = null; // v0.2 P1:当前激活的 sprite pack({ manifest, imageUrls, packDir })
 let returnToIdleTimer = null; // 吃完几秒后回 idle 的定时器
 let currentSpriteState = 'idle'; // 主进程持有的"猫当前 sprite 状态"
 let inTransientState = false;    // 是否在 eat 等临时状态中(不被 hunger 自动覆盖)
@@ -332,6 +334,9 @@ function createCatWindow() {
 
   catWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
+  // pack 下发(renderer 收到后才注入 sprite CSS 并启动入场动画)
+  catWindow.webContents.once('did-finish-load', sendPackToRenderer);
+
   catWindow.once('ready-to-show', () => {
     catWindow.show();
   });
@@ -431,6 +436,29 @@ function createCatWindow() {
 //   - "base state":由 hunger.getBaseSpriteState() 决定(idle / walk),hunger 一变就重算
 //   - "transient state":eat,由触发事件设入,持续 eatDurationMs,完事自动回 base
 //   - inTransientState 锁住期间,hunger 变化不会立刻盖掉显示
+
+// v0.2 P1:加载 active sprite pack。先 hardcode 到 default-cat;
+// v0.2 P3 接 appConfig.activePet 后会先尝试 userData/pets/<id>/,
+// 失败再 fallback 到这里的 default-cat。
+function loadActivePack() {
+  const defaultPackDir = path.join(__dirname, 'assets', 'default-cat');
+  try {
+    const pack = loadPack(defaultPackDir);
+    console.log(`[Committen] pack loaded: ${pack.manifest.displayName} (${pack.manifest.id})`);
+    return pack;
+  } catch (e) {
+    console.error('[Committen] FAILED to load default-cat pack:', e.message);
+    throw e; // default-cat 是 bundled 资产,加载失败 = 安装包损坏,直接崩
+  }
+}
+
+function sendPackToRenderer() {
+  if (!catWindow || catWindow.isDestroyed() || !activePack) return;
+  catWindow.webContents.send('cat:pack', {
+    manifest: activePack.manifest,
+    imageUrls: activePack.imageUrls,
+  });
+}
 
 function _sendStateToRenderer(state) {
   if (!catWindow || catWindow.isDestroyed()) return;
@@ -808,6 +836,9 @@ app.whenReady().then(() => {
   console.log('[Committen] whitelist:', (appConfig.whitelist || []).join(', '));
   console.log('[Committen] interval:', appConfig.monitor?.intervalMs, 'ms, actuallyMinimize:', appConfig.monitor?.actuallyMinimize);
   console.log('[Committen] gitRepo:', appConfig.gitRepo || '(none)');
+
+  // pack 必须在 createCatWindow 之前加载,这样 did-finish-load 触发时就能立刻下发
+  activePack = loadActivePack();
 
   createCatWindow();
   startHunger();

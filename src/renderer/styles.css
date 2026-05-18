@@ -25,34 +25,41 @@ html, body {
 }
 
 /* ====================================================================
-   Sprite 系统
-   原始素材:80×64 / 帧
-   渲染时整体放大(transform: scale(2.4)) → 192×154 显示尺寸
-   image-rendering: pixelated 保证像素艺术不被双线性插值糊掉
+   Sprite 系统(v0.2 P1:pack 抽象)
+   尺寸 / 缩放由 active pack 的 manifest 通过 CSS 变量驱动,
+   每状态的 background-image + @keyframes 由 cat.js 运行时注入。
+   见 src/core/sprite-pack-loader.js + src/assets/<pack-id>/manifest.json
    ==================================================================== */
 
+:root {
+  /* 默认值与 default-cat manifest 一致;若 pack 加载失败仍可降级渲染骨架 */
+  --frame-w: 80px;
+  --frame-h: 64px;
+  --display-scale: 2.4;
+}
+
 .cat-sprite-wrapper {
-  width: 80px;
-  height: 64px;
+  width: var(--frame-w);
+  height: var(--frame-h);
   position: relative;
   pointer-events: none;
   /* 落地反弹的入场动画(只跑一次) */
   animation: cat-hello 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   /* 整体放大 */
-  transform: scale(2.4);
+  transform: scale(var(--display-scale));
   transform-origin: center;
   /* 投影:让猫在浅色桌面上也看得见 */
   filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35));
 }
 
 /* pacer 层:负责 sprite 朝向(配合桌面行走的方向)
-   素材默认朝向是"左"(头在左,尾在右)。所以当猫向右走时要翻转。
+   素材默认朝向是 manifest.defaultFacing(default-cat 是 "left")。
    桌面位移由主进程驱动整个窗口,不在这里做。 */
 .cat-sprite-pacer {
   position: absolute;
   inset: 0;
-  width: 80px;
-  height: 64px;
+  width: var(--frame-w);
+  height: var(--frame-h);
   transition: transform 0.18s ease-out;
 }
 
@@ -63,72 +70,28 @@ body.cat-flipped .cat-sprite-pacer {
 .cat-sprite {
   position: absolute;
   inset: 0;
-  width: 80px;
-  height: 64px;
+  width: var(--frame-w);
+  height: var(--frame-h);
   background-repeat: no-repeat;
-  background-size: auto 64px;
+  background-size: auto var(--frame-h);
   /* 像素艺术专用渲染模式 */
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
 }
 
-/* idle:8 帧,慢悠悠地 1 秒一轮 */
-.cat-sprite--idle {
-  background-image: url('../assets/idle.png');
-  animation: sprite-idle 1.0s steps(8) infinite;
-}
-@keyframes sprite-idle {
-  from { background-position: 0 0; }
-  to   { background-position: -640px 0; }
-}
+/* Per-state .cat-sprite--<state> 规则 + @keyframes sprite-<state>-<pack-id>
+   由 cat.js::injectPackStyles() 在 onPack 时注入。 */
 
-/* walk:12 帧,稍快 0.9 秒一轮 */
-.cat-sprite--walk {
-  background-image: url('../assets/walk.png');
-  animation: sprite-walk 0.9s steps(12) infinite;
-}
-@keyframes sprite-walk {
-  from { background-position: 0 0; }
-  to   { background-position: -960px 0; }
-}
-
-/* eat:7 帧,有节奏感 0.7 秒一轮 */
-.cat-sprite--eat {
-  background-image: url('../assets/eat.png');
-  animation: sprite-eat 0.7s steps(7) infinite;
-}
-@keyframes sprite-eat {
-  from { background-position: 0 0; }
-  to   { background-position: -560px 0; }
-}
-
-/* sleep:8 帧,慢悠悠 1.6 秒一轮(呼吸感) */
-.cat-sprite--sleep {
-  background-image: url('../assets/sleep.png');
-  animation: sprite-sleep 1.6s steps(8) infinite;
-}
-@keyframes sprite-sleep {
-  from { background-position: 0 0; }
-  to   { background-position: -640px 0; }
-}
-
-/* attack:8 帧,凶猛 0.55 秒一轮(扑爪攻击非白名单应用,比 eat 更急促) */
-.cat-sprite--attack {
-  background-image: url('../assets/attack.png');
-  animation: sprite-attack 0.55s steps(8) infinite;
-}
-@keyframes sprite-attack {
-  from { background-position: 0 0; }
-  to   { background-position: -640px 0; }
-}
-
-/* 入场:从下方弹起,带轻微 overshoot */
+/* 入场:从下方弹起,带轻微 overshoot。
+   关键帧的 scale 系数相对 --display-scale 等比缩放,以便不同 pack 的
+   入场幅度保持视觉一致。比例:0.625 / 1.083 / 0.979 / 1.0(对应 default-cat
+   的原版数值 1.5 / 2.6 / 2.35 / 2.4)。 */
 @keyframes cat-hello {
-  0%   { transform: scale(1.5) translateY(40px); opacity: 0; }
-  60%  { transform: scale(2.6) translateY(-8px); opacity: 1; }
-  80%  { transform: scale(2.35) translateY(2px); }
-  100% { transform: scale(2.4) translateY(0); opacity: 1; }
+  0%   { transform: scale(calc(var(--display-scale) * 0.625)) translateY(40px); opacity: 0; }
+  60%  { transform: scale(calc(var(--display-scale) * 1.083)) translateY(-8px); opacity: 1; }
+  80%  { transform: scale(calc(var(--display-scale) * 0.979)) translateY(2px); }
+  100% { transform: scale(var(--display-scale)) translateY(0); opacity: 1; }
 }
 
 /* ==================== 饱腹感血条 ==================== */
