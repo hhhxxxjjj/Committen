@@ -32,6 +32,8 @@ let hunger = null;    // HungerSystem 实例
 let decayTimer = null; // 每分钟 -1 的定时器
 let appConfig = null; // 加载后的配置
 let activePack = null; // v0.2 P1:当前激活的 sprite pack({ manifest, imageUrls, packDir })
+let hatchWindow = null; // v0.2 P2:Hatch 窗口
+let petsListWindow = null; // v0.2 P3:Pets 列表窗口
 let returnToIdleTimer = null; // 吃完几秒后回 idle 的定时器
 let currentSpriteState = 'idle'; // 主进程持有的"猫当前 sprite 状态"
 let inTransientState = false;    // 是否在 eat 等临时状态中(不被 hunger 自动覆盖)
@@ -437,18 +439,38 @@ function createCatWindow() {
 //   - "transient state":eat,由触发事件设入,持续 eatDurationMs,完事自动回 base
 //   - inTransientState 锁住期间,hunger 变化不会立刻盖掉显示
 
-// v0.2 P1:加载 active sprite pack。先 hardcode 到 default-cat;
-// v0.2 P3 接 appConfig.activePet 后会先尝试 userData/pets/<id>/,
-// 失败再 fallback 到这里的 default-cat。
+// v0.2 P3:解析 active pack 目录。优先 appConfig.activePet 指向的
+// userData/pets/<id>/,缺失或加载失败 fallback 到 bundled default-cat。
+function resolveActivePackDir() {
+  const activePetId = appConfig?.activePet;
+  if (activePetId && activePetId !== 'default-cat') {
+    const userPath = path.join(app.getPath('userData'), 'pets', activePetId);
+    if (fs.existsSync(path.join(userPath, 'manifest.json'))) {
+      return userPath;
+    }
+    console.warn(
+      `[Committen] config.activePet="${activePetId}" not found in userData, falling back to default-cat`
+    );
+  }
+  return path.join(__dirname, 'assets', 'default-cat');
+}
+
 function loadActivePack() {
-  const defaultPackDir = path.join(__dirname, 'assets', 'default-cat');
+  const packDir = resolveActivePackDir();
   try {
-    const pack = loadPack(defaultPackDir);
+    const pack = loadPack(packDir);
     console.log(`[Committen] pack loaded: ${pack.manifest.displayName} (${pack.manifest.id})`);
     return pack;
   } catch (e) {
-    console.error('[Committen] FAILED to load default-cat pack:', e.message);
-    throw e; // default-cat 是 bundled 资产,加载失败 = 安装包损坏,直接崩
+    console.error('[Committen] failed to load pack at', packDir, ':', e.message);
+    if (packDir !== path.join(__dirname, 'assets', 'default-cat')) {
+      // 用户 pack 损坏 → 退回 default-cat,而不是崩
+      console.warn('[Committen] retrying with default-cat');
+      const fallback = loadPack(path.join(__dirname, 'assets', 'default-cat'));
+      console.log(`[Committen] pack loaded (fallback): ${fallback.manifest.displayName}`);
+      return fallback;
+    }
+    throw e; // default-cat 都坏了 = 安装包损坏,直接崩
   }
 }
 
@@ -802,6 +824,202 @@ function startGitWatcher() {
     });
   }
 }
+
+// ==================== Hatch (v0.2 P2) ====================
+
+function createHatchWindow() {
+  if (hatchWindow && !hatchWindow.isDestroyed()) {
+    hatchWindow.focus();
+    return;
+  }
+  hatchWindow = new BrowserWindow({
+    width: 760,
+    height: 760,
+    title: 'Hatch a pet · Committen',
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#1a1a1a',
+    webPreferences: {
+      preload: path.join(__dirname, 'renderer', 'hatch', 'hatch-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  hatchWindow.loadFile(path.join(__dirname, 'renderer', 'hatch', 'hatch.html'));
+  hatchWindow.on('closed', () => { hatchWindow = null; });
+}
+
+// 文件系统安全的名字:保留 Unicode(中文 OK),只换掉 Windows 禁字与空白。
+function slugifyPetName(raw) {
+  const safe = String(raw || '')
+    .replace(/[\\/:*?"<>|]+/g, '_')
+    .replace(/\s+/g, '-')
+    .slice(0, 24)
+    .replace(/^[-._]+|[-._]+$/g, '');
+  return safe || 'pet';
+}
+
+function buildProceduralManifest({ id, displayName }) {
+  return {
+    id,
+    displayName,
+    version: '1.0',
+    type: 'procedural',
+    // 192×192 是 pixelize 输出尺寸;displayScale 0.95 留出余量给 attack 1.2x 缩放
+    frameSize: { w: 192, h: 192 },
+    displayScale: 0.95,
+    defaultFacing: 'right',
+    baseImage: 'idle.png',
+    states: {
+      idle:   { procedural: 'breath' },
+      walk:   { procedural: 'bob-translate' },
+      sleep:  { procedural: 'tilt-pulse' },
+      eat:    { procedural: 'bob-food' },
+      attack: { procedural: 'scale-shake' },
+    },
+  };
+}
+
+ipcMain.on('hatch:open', () => {
+  createHatchWindow();
+});
+
+ipcMain.on('hatch:close', () => {
+  if (hatchWindow && !hatchWindow.isDestroyed()) hatchWindow.close();
+});
+
+ipcMain.handle('hatch:save', async (_e, { name, pngBuffer }) => {
+  try {
+    const safe = slugifyPetName(name);
+    const id = `${safe}-${Date.now()}`;
+    const petDir = path.join(app.getPath('userData'), 'pets', id);
+    fs.mkdirSync(petDir, { recursive: true });
+    fs.writeFileSync(path.join(petDir, 'idle.png'), Buffer.from(pngBuffer));
+    const manifest = buildProceduralManifest({ id, displayName: String(name).trim() });
+    fs.writeFileSync(
+      path.join(petDir, 'manifest.json'),
+      JSON.stringify(manifest, null, 2),
+      'utf-8'
+    );
+    console.log(`[Committen] hatched pet "${name}" -> ${petDir}`);
+    return { ok: true, id, displayName: manifest.displayName };
+  } catch (e) {
+    console.error('[Committen] hatch:save failed:', e);
+    return { ok: false, error: e.message };
+  }
+});
+
+// ==================== Pets list / 切换 (v0.2 P3) ====================
+
+function createPetsListWindow() {
+  if (petsListWindow && !petsListWindow.isDestroyed()) {
+    petsListWindow.focus();
+    return;
+  }
+  petsListWindow = new BrowserWindow({
+    width: 480,
+    height: 560,
+    title: 'Pets · Committen',
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#1a1a1a',
+    webPreferences: {
+      preload: path.join(__dirname, 'renderer', 'pets-list', 'pets-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  petsListWindow.loadFile(path.join(__dirname, 'renderer', 'pets-list', 'pets-list.html'));
+  petsListWindow.on('closed', () => { petsListWindow = null; });
+}
+
+// 把单字段写回 userData/config.json。读时合并 default,所以这里只写差量是安全的。
+function updateConfigField(field, value) {
+  const userPath = ensureUserConfigExists();
+  let cfg = {};
+  try {
+    const raw = fs.readFileSync(userPath, 'utf-8');
+    cfg = JSON.parse(raw);
+  } catch (e) {
+    console.warn('[Committen] updateConfigField: existing config unreadable, overwriting:', e.message);
+  }
+  cfg[field] = value;
+  fs.writeFileSync(userPath, JSON.stringify(cfg, null, 2), 'utf-8');
+}
+
+ipcMain.on('pets:open', () => {
+  createPetsListWindow();
+});
+
+ipcMain.on('pets:close', () => {
+  if (petsListWindow && !petsListWindow.isDestroyed()) petsListWindow.close();
+});
+
+ipcMain.handle('pets:list', async () => {
+  const pets = [];
+
+  // 1. Bundled default cat
+  try {
+    const p = loadPack(path.join(__dirname, 'assets', 'default-cat'));
+    pets.push({
+      id: p.manifest.id,
+      displayName: p.manifest.displayName,
+      type: p.manifest.type,
+      thumbnailUrl: p.imageUrls.idle || p.imageUrls.base,
+      builtin: true,
+    });
+  } catch (e) {
+    console.warn('[Committen] pets:list could not load bundled default-cat:', e.message);
+  }
+
+  // 2. User-hatched packs from userData/pets/
+  const userDir = path.join(app.getPath('userData'), 'pets');
+  if (fs.existsSync(userDir)) {
+    let entries = [];
+    try { entries = fs.readdirSync(userDir, { withFileTypes: true }); } catch (_) {}
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const petDir = path.join(userDir, entry.name);
+      try {
+        const p = loadPack(petDir);
+        pets.push({
+          id: p.manifest.id,
+          displayName: p.manifest.displayName,
+          type: p.manifest.type,
+          thumbnailUrl: p.imageUrls.base || p.imageUrls.idle,
+          builtin: false,
+        });
+      } catch (e) {
+        console.warn(`[Committen] pets:list skipping bad pack at ${petDir}:`, e.message);
+      }
+    }
+  }
+
+  return {
+    pets,
+    activePet: appConfig?.activePet || 'default-cat',
+  };
+});
+
+ipcMain.handle('pets:set-active', async (_e, id) => {
+  try {
+    updateConfigField('activePet', id);
+    console.log(`[Committen] activePet -> ${id}, relaunching...`);
+    // 让 IPC 响应回到 renderer + 关掉子窗口,再 relaunch
+    setTimeout(() => {
+      app.relaunch();
+      app.quit();
+    }, 150);
+    return { ok: true };
+  } catch (e) {
+    console.error('[Committen] pets:set-active failed:', e);
+    return { ok: false, error: e.message };
+  }
+});
 
 // ==================== IPC ====================
 

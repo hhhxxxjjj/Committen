@@ -6,6 +6,12 @@ contextBridge.exposeInMainWorld('committen', {
   resetPosition: () => ipcRenderer.send('cat:reset-position'),
   openConfig: () => ipcRenderer.send('cat:open-config'),
 
+  // v0.2 P2:打开 Hatch 窗口
+  openHatch: () => ipcRenderer.send('hatch:open'),
+
+  // v0.2 P3:打开 Pets 列表窗口
+  openPetsList: () => ipcRenderer.send('pets:open'),
+
   // 主进程通知 renderer 切 sprite 状态(idle / walk / eat)
   onSetState: (callback) => {
     ipcRenderer.on('cat:set-state', (_e, state) => callback(state));

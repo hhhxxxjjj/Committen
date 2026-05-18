@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hatch a Pet · Committen</title>
+  <link rel="stylesheet" href="./hatch.css" />
+  <!-- NOTE: no <meta http-equiv="Content-Security-Policy"> for v0.2-alpha.
+       The bundled CDN load of @imgly/background-removal needs esm.sh +
+       staticimgly.com + WebAssembly. v0.2.0-beta TODO: lock down CSP
+       once we bundle @imgly locally. -->
+</head>
+<body>
+  <header>
+    <h1>Hatch a pet</h1>
+    <p class="subtitle">
+      Drop a photo → local AI removes the background → auto-centers in a
+      square frame → pixelizes into a sprite. <strong>100% local</strong>;
+      nothing leaves your machine after the first model download.
+    </p>
+  </header>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>1. Photo</h2>
+      <div id="drop-zone" class="drop-zone">
+        <p><strong>Drop image here</strong></p>
+        <p class="hint">or click to choose (PNG / JPG)</p>
+        <input type="file" id="file-input" accept="image/*" hidden />
+      </div>
+      <canvas id="originalPreview" width="240" height="240"></canvas>
+    </section>
+
+    <section class="panel">
+      <h2>2. Sprite preview</h2>
+      <canvas id="finalPreview" width="192" height="192"></canvas>
+      <div class="controls">
+        <div class="control">
+          <label for="pixel-size">Pixel size</label>
+          <input type="range" id="pixel-size" min="32" max="96" step="16" value="64" />
+          <span id="pixel-size-val" class="val">64</span>
+        </div>
+        <div class="control">
+          <label for="palette-size">Palette</label>
+          <input type="range" id="palette-size" min="4" max="32" step="4" value="16" />
+          <span id="palette-size-val" class="val">16</span>
+        </div>
+        <div class="control">
+          <label for="outline">Outline</label>
+          <input type="range" id="outline" min="0" max="2" step="1" value="0" />
+          <span id="outline-val" class="val">0</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel save-panel">
+    <h2>3. Name &amp; hatch</h2>
+    <div class="save-row">
+      <input type="text" id="pet-name" placeholder="My pet's name" maxlength="30" />
+      <button id="save-btn" type="button" disabled>Hatch!</button>
+      <button id="cancel-btn" type="button" class="btn-ghost">Cancel</button>
+    </div>
+    <p id="status" class="status">Idle. Drop a photo to begin.</p>
+  </section>
+
+  <script type="module" src="./hatch.js"></script>
+</body>
+</html>

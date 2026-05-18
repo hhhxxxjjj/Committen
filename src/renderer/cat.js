@@ -10,6 +10,8 @@
 
   const btnMenu = document.getElementById('btnMenu');
   const menuEl = document.getElementById('catMenu');
+  const menuHatch = document.getElementById('menuHatch');
+  const menuPets = document.getElementById('menuPets');
   const menuReset = document.getElementById('menuReset');
   const menuConfig = document.getElementById('menuConfig');
   const menuQuit = document.getElementById('menuQuit');
@@ -43,12 +45,28 @@
       root.style.setProperty('--display-scale', String(displayScale));
     }
 
-    if (type !== 'multi-frame') {
-      // P2 会接 procedural 渲染。P1 只支持 multi-frame(default-cat 走这条)
-      console.warn('[Committen] pack type', type, 'not yet rendered (P2)');
-      return;
+    let cssParts;
+    if (type === 'multi-frame') {
+      cssParts = buildMultiFrameCSS(manifest, imageUrls);
+    } else if (type === 'procedural') {
+      cssParts = buildProceduralCSS(manifest, imageUrls);
+    } else {
+      console.warn('[Committen] unknown pack type:', type);
+      cssParts = [];
     }
 
+    let styleEl = document.getElementById('cat-pack-styles');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'cat-pack-styles';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = cssParts.join('\n\n');
+    console.log(`[Committen] pack loaded: ${manifest.displayName} (${manifest.id}, ${type})`);
+  }
+
+  function buildMultiFrameCSS(manifest, imageUrls) {
+    const { frameSize, states } = manifest;
     const parts = [];
     for (const state of STATES) {
       const s = states[state];
@@ -67,15 +85,50 @@
         `}`
       );
     }
+    return parts;
+  }
 
-    let styleEl = document.getElementById('cat-pack-styles');
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = 'cat-pack-styles';
-      document.head.appendChild(styleEl);
-    }
-    styleEl.textContent = parts.join('\n\n');
-    console.log(`[Committen] pack loaded: ${manifest.displayName} (${manifest.id})`);
+  // procedural pet:单 baseImage 跨所有 5 状态,每状态用 CSS transform 派生动画。
+  // 诚实度参见 docs/v0.2-pet-hatch.md §3.3 — 比真·多帧 sprite 逊色,但远比静态强。
+  function buildProceduralCSS(manifest, imageUrls) {
+    const url = imageUrls.base;
+    const id = manifest.id;
+    const kf = (name) => `proc-${name}-${id}`;
+    const decl = (state, anim, extra) =>
+      `.cat-sprite--${state} {\n` +
+      `  background-image: url("${url}");\n` +
+      `  animation: ${anim};\n` +
+      (extra || '') +
+      `}`;
+
+    return [
+      // idle:慢呼吸
+      decl('idle', `${kf('breath')} 1.2s ease-in-out infinite alternate`),
+      `@keyframes ${kf('breath')} {\n  from { transform: scale(0.98); }\n  to   { transform: scale(1.00); }\n}`,
+
+      // walk:Y bobbing(X 位移由主进程驱动整个窗口,不在这里加)
+      decl('walk', `${kf('walk-bob')} 0.5s ease-in-out infinite alternate`),
+      `@keyframes ${kf('walk-bob')} {\n  from { transform: translateY(0); }\n  to   { transform: translateY(-3px); }\n}`,
+
+      // sleep:倾斜 + 慢脉动
+      decl('sleep', `${kf('sleep')} 1.6s ease-in-out infinite alternate`, `  transform-origin: bottom center;\n`),
+      `@keyframes ${kf('sleep')} {\n  from { transform: rotate(-4deg) scale(0.99); }\n  to   { transform: rotate(-6deg) scale(1.01); }\n}`,
+
+      // eat:短促 Y bobbing(spec §3.3 提到"食物 emoji popup",需要 DOM 元素而非纯 CSS,留 v0.2.1)
+      decl('eat', `${kf('eat-bob')} 0.28s ease-in-out infinite alternate`),
+      `@keyframes ${kf('eat-bob')} {\n  from { transform: translateY(0); }\n  to   { transform: translateY(-4px); }\n}`,
+
+      // attack:scale + shake(spec §3.3 还提到"水平翻转",但 .cat-sprite-pacer 已经做了方向翻转,不再叠加)
+      decl('attack', `${kf('attack')} 0.5s ease-in-out infinite`),
+      `@keyframes ${kf('attack')} {\n` +
+      `  0%   { transform: scale(1.00) translateX(0); }\n` +
+      `  15%  { transform: scale(1.18) translateX(-2px); }\n` +
+      `  35%  { transform: scale(1.20) translateX(3px); }\n` +
+      `  55%  { transform: scale(1.18) translateX(-2px); }\n` +
+      `  85%  { transform: scale(1.05) translateX(1px); }\n` +
+      `  100% { transform: scale(1.00) translateX(0); }\n` +
+      `}`,
+    ];
   }
 
   window.committen.onPack((pack) => {
@@ -90,9 +143,12 @@
 
   // 主进程通知方向变化(走到边缘要转身)
   // dir = 1 表示向右,-1 表示向左
-  // 素材默认朝向是"左",所以向右走 (dir=1) 时要翻转
+  // pack-aware:当 sprite 朝向 (manifest.defaultFacing) 与移动方向不一致时翻转
   window.committen.onDirection((dir) => {
-    document.body.classList.toggle('cat-flipped', dir === 1);
+    const facing = activePack?.manifest?.defaultFacing || 'left';
+    const facingLeft = facing === 'left';
+    const goingRight = dir === 1;
+    document.body.classList.toggle('cat-flipped', facingLeft === goingRight);
   });
 
   window.committen.onSetState((state) => {
@@ -180,6 +236,16 @@
   });
 
   // 菜单项点击
+  menuHatch.addEventListener('click', () => {
+    window.committen.openHatch();
+    closeMenu();
+  });
+
+  menuPets.addEventListener('click', () => {
+    window.committen.openPetsList();
+    closeMenu();
+  });
+
   menuReset.addEventListener('click', () => {
     window.committen.resetPosition();
     closeMenu();
