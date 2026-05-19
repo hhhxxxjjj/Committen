@@ -6,6 +6,9 @@ contextBridge.exposeInMainWorld('committen', {
   resetPosition: () => ipcRenderer.send('cat:reset-position'),
   openConfig: () => ipcRenderer.send('cat:open-config'),
 
+  // v0.2.1:隐藏 sprite(后台进程继续跑,托盘留守。从托盘 Show cat 重显)
+  hide: () => ipcRenderer.send('cat:hide'),
+
   // v0.2 P2:打开 Hatch 窗口
   openHatch: () => ipcRenderer.send('hatch:open'),
 

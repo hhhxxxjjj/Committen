@@ -366,9 +366,29 @@ body.cat--intro .cat-ctrl {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   z-index: 10;
   -webkit-app-region: no-drag;
+  /* v0.2.1:菜单可能比 220px 窗口还高(Hide 进来之后),用 viewport 限高 + 滚动条兜底 */
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
   /* 出现动画 */
   animation: cat-menu-in 0.16s ease-out;
   transform-origin: top right;
+}
+
+/* Webkit / Chromium 细滚动条(Electron 默认引擎) */
+.cat-menu::-webkit-scrollbar {
+  width: 6px;
+}
+.cat-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cat-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 3px;
+}
+.cat-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .cat-menu[hidden] {
@@ -385,7 +405,7 @@ body.cat--intro .cat-ctrl {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 5px 10px;       /* v0.2.1:7→5,留点纵向空间给 Hide 这条新增项 */
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.92);
@@ -394,6 +414,7 @@ body.cat--intro .cat-ctrl {
   cursor: pointer;
   border-radius: 5px;
   font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  flex-shrink: 0;          /* 滚动容器里别被压扁 */
 }
 
 .cat-menu-item:hover {

@@ -12,6 +12,7 @@
   const menuEl = document.getElementById('catMenu');
   const menuHatch = document.getElementById('menuHatch');
   const menuPets = document.getElementById('menuPets');
+  const menuHide = document.getElementById('menuHide');
   const menuReset = document.getElementById('menuReset');
   const menuConfig = document.getElementById('menuConfig');
   const menuQuit = document.getElementById('menuQuit');
@@ -282,6 +283,11 @@
   menuPets.addEventListener('click', () => {
     window.committen.openPetsList();
     closeMenu();
+  });
+
+  menuHide.addEventListener('click', () => {
+    closeMenu();
+    window.committen.hide();
   });
 
   menuReset.addEventListener('click', () => {

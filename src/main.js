@@ -2,7 +2,7 @@
 // v0.1 Day 6: 加入活动窗口监听,非白名单窗口 → 触发猫切到 eat 状态
 //             (Day 7 再加上"真的最小化")
 
-const { app, BrowserWindow, screen, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, screen, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const WindowMonitor = require('./monitor/window-monitor');
@@ -34,6 +34,8 @@ let appConfig = null; // 加载后的配置
 let activePack = null; // v0.2 P1:当前激活的 sprite pack({ manifest, imageUrls, packDir })
 let hatchWindow = null; // v0.2 P2:Hatch 窗口
 let petsListWindow = null; // v0.2 P3:Pets 列表窗口
+let tray = null; // v0.2.1:系统托盘(后台 pet 资格证)
+let isQuitting = false; // 用户主动 Quit 才真退出;否则窗口关也维持后台
 let returnToIdleTimer = null; // 吃完几秒后回 idle 的定时器
 let currentSpriteState = 'idle'; // 主进程持有的"猫当前 sprite 状态"
 let inTransientState = false;    // 是否在 eat 等临时状态中(不被 hunger 自动覆盖)
@@ -340,7 +342,14 @@ function createCatWindow() {
   catWindow.webContents.once('did-finish-load', sendPackToRenderer);
 
   catWindow.once('ready-to-show', () => {
-    catWindow.show();
+    // --hidden 标志:auto-start 走的路径,只露托盘,不弹猫;
+    // 手动启动一律可见
+    if (!process.argv.includes('--hidden')) {
+      catWindow.show();
+    } else {
+      console.log('[Committen] launched with --hidden, cat starts invisible (use tray to show)');
+    }
+    refreshTrayMenu();
   });
 
   if (process.argv.includes('--dev')) {
@@ -1021,31 +1030,126 @@ ipcMain.handle('pets:set-active', async (_e, id) => {
   }
 });
 
-// ==================== IPC ====================
+// ==================== 命令(IPC + tray 共用) ====================
 
-ipcMain.on('cat:quit', () => {
+function quitApp() {
+  isQuitting = true;
   app.quit();
-});
+}
 
-// 重置位置(右键菜单将来用得到;Day 2 暂留)
-ipcMain.on('cat:reset-position', () => {
-  if (!catWindow) return;
+function resetCatPosition() {
+  if (!catWindow || catWindow.isDestroyed()) return;
   const def = getDefaultPosition();
   snapping = true;
   catWindow.setPosition(def.x, def.y);
   setTimeout(() => { snapping = false; }, 50);
   saveState({ position: def });
-});
+}
 
-// v0.1.2: 用户点 ⚙️ 按钮 → 用默认编辑器(记事本等)打开 config.json
-ipcMain.on('cat:open-config', async () => {
-  const userPath = ensureUserConfigExists(); // 不存在就先建
+async function openUserConfig() {
+  const userPath = ensureUserConfigExists();
   console.log(`[Committen] opening config: ${userPath}`);
   const error = await shell.openPath(userPath);
   if (error) {
     console.error('[Committen] failed to open config:', error);
   }
-});
+}
+
+function showCat() {
+  if (!catWindow || catWindow.isDestroyed()) {
+    createCatWindow();
+  } else {
+    catWindow.show();
+  }
+  refreshTrayMenu();
+}
+
+function hideCat() {
+  if (catWindow && !catWindow.isDestroyed()) {
+    catWindow.hide();
+    refreshTrayMenu();
+  }
+}
+
+function toggleCatVisibility() {
+  if (!catWindow || catWindow.isDestroyed() || !catWindow.isVisible()) {
+    showCat();
+  } else {
+    hideCat();
+  }
+}
+
+// ==================== IPC ====================
+
+ipcMain.on('cat:quit', quitApp);
+ipcMain.on('cat:reset-position', resetCatPosition);
+ipcMain.on('cat:open-config', openUserConfig);
+ipcMain.on('cat:hide', hideCat);
+
+// ==================== Tray (v0.2.1) ====================
+
+function getAutoStartEnabled() {
+  return app.getLoginItemSettings().openAtLogin;
+}
+
+function setAutoStartEnabled(enabled) {
+  // 启用时附 --hidden 标志:开机时低调启动,只露托盘,不弹猫
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    args: enabled ? ['--hidden'] : [],
+  });
+  console.log(`[Committen] auto-start ${enabled ? 'enabled (launches hidden)' : 'disabled'}`);
+}
+
+function buildTrayMenu() {
+  const visible = catWindow && !catWindow.isDestroyed() && catWindow.isVisible();
+  return Menu.buildFromTemplate([
+    {
+      label: visible ? 'Hide cat' : 'Show cat',
+      click: toggleCatVisibility,
+    },
+    { type: 'separator' },
+    { label: 'Hatch from photo…', click: createHatchWindow },
+    { label: 'Pets…', click: createPetsListWindow },
+    { type: 'separator' },
+    {
+      label: 'Auto-start with Windows',
+      type: 'checkbox',
+      checked: getAutoStartEnabled(),
+      click: (menuItem) => {
+        setAutoStartEnabled(menuItem.checked);
+        // checkbox 状态已被 Electron 同步,不需手动 refresh
+      },
+    },
+    { type: 'separator' },
+    { label: 'Open config…', click: openUserConfig },
+    { label: 'Reset cat position', click: resetCatPosition },
+    { type: 'separator' },
+    { label: 'Quit Committen', click: quitApp },
+  ]);
+}
+
+function refreshTrayMenu() {
+  if (tray && !tray.isDestroyed()) {
+    tray.setContextMenu(buildTrayMenu());
+  }
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, 'assets', 'icon.ico');
+  try {
+    tray = new Tray(iconPath);
+  } catch (e) {
+    console.error('[Committen] tray creation failed:', e.message);
+    tray = null;
+    return;
+  }
+  tray.setToolTip('Committen');
+  tray.setContextMenu(buildTrayMenu());
+  // 左键 toggle 显隐(Windows 习惯)
+  tray.on('click', toggleCatVisibility);
+  console.log('[Committen] tray ready');
+}
 
 // ==================== App 生命周期 ====================
 
@@ -1054,10 +1158,12 @@ app.whenReady().then(() => {
   console.log('[Committen] whitelist:', (appConfig.whitelist || []).join(', '));
   console.log('[Committen] interval:', appConfig.monitor?.intervalMs, 'ms, actuallyMinimize:', appConfig.monitor?.actuallyMinimize);
   console.log('[Committen] gitRepo:', appConfig.gitRepo || '(none)');
+  console.log('[Committen] auto-start:', getAutoStartEnabled() ? 'on' : 'off');
 
   // pack 必须在 createCatWindow 之前加载,这样 did-finish-load 触发时就能立刻下发
   activePack = loadActivePack();
 
+  createTray();           // 先建托盘,即使 catWindow 起不来,用户也有出口
   createCatWindow();
   startHunger();
   startMonitor();
@@ -1070,6 +1176,18 @@ app.whenReady().then(() => {
   });
 });
 
+// 用户主动 Quit(tray / ⚙ 菜单)→ 真退出;
+// 仅子窗口被关(Hatch / Pets 用户点关闭)→ 维持后台,托盘留守
 app.on('window-all-closed', () => {
-  app.quit();
+  if (isQuitting || !tray || tray.isDestroyed()) {
+    app.quit();
+  }
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy();
+    tray = null;
+  }
 });
