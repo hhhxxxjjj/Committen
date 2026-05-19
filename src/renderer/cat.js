@@ -7,12 +7,14 @@
   const hungerEl = document.getElementById('catHunger');
   const hungerFill = document.getElementById('hungerFill');
   const hungerNum = document.getElementById('hungerNum');
+  const streakEl = document.getElementById('catStreak');
 
   const btnMenu = document.getElementById('btnMenu');
   const menuEl = document.getElementById('catMenu');
   const menuHatch = document.getElementById('menuHatch');
   const menuPets = document.getElementById('menuPets');
   const menuWhitelist = document.getElementById('menuWhitelist');
+  const menuDiary = document.getElementById('menuDiary');
   const menuHide = document.getElementById('menuHide');
   const menuReset = document.getElementById('menuReset');
   const menuConfig = document.getElementById('menuConfig');
@@ -235,6 +237,23 @@
     updateHunger(value);
   });
 
+  // v0.2.1:streak 显示。current>0 显 "Nd streak";broken 显 "streak broken · best Nd";
+  // 完全没历史(current=0 && !broken && longest=0)就隐藏。
+  window.committen.onStreak(({ current, longest, broken }) => {
+    if (!streakEl) return;
+    if (current > 0) {
+      streakEl.hidden = false;
+      streakEl.classList.remove('is-broken');
+      streakEl.textContent = current === 1 ? '1 day streak' : `${current} day streak`;
+    } else if (broken && longest > 0) {
+      streakEl.hidden = false;
+      streakEl.classList.add('is-broken');
+      streakEl.textContent = `streak broken · best ${longest}d`;
+    } else {
+      streakEl.hidden = true;
+    }
+  });
+
   // ============ 调试入口 ============
   window.committenDebug = {
     setState,
@@ -288,6 +307,11 @@
 
   menuWhitelist.addEventListener('click', () => {
     window.committen.openWhitelist();
+    closeMenu();
+  });
+
+  menuDiary.addEventListener('click', () => {
+    window.committen.openDiary();
     closeMenu();
   });
 

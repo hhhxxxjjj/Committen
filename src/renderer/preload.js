@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('committen', {
   // v0.2.1:打开白名单 UI
   openWhitelist: () => ipcRenderer.send('whitelist:open'),
 
+  // v0.2.1:打开 Diary
+  openDiary: () => ipcRenderer.send('diary:open'),
+
   // 主进程通知 renderer 切 sprite 状态(idle / walk / eat)
   onSetState: (callback) => {
     ipcRenderer.on('cat:set-state', (_e, state) => callback(state));
@@ -37,5 +40,10 @@ contextBridge.exposeInMainWorld('committen', {
   // 主进程推送猫朝向变化(1=右,-1=左)
   onDirection: (callback) => {
     ipcRenderer.on('cat:direction', (_e, dir) => callback(dir));
+  },
+
+  // v0.2.1:主进程推送 streak 信息 { current, longest, broken }
+  onStreak: (callback) => {
+    ipcRenderer.on('cat:streak', (_e, info) => callback(info));
   },
 });

@@ -2,13 +2,14 @@
 // v0.1 Day 6: 加入活动窗口监听,非白名单窗口 → 触发猫切到 eat 状态
 //             (Day 7 再加上"真的最小化")
 
-const { app, BrowserWindow, Tray, Menu, screen, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, screen, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const WindowMonitor = require('./monitor/window-monitor');
 const GitWatcher = require('./monitor/git-watcher');
 const HungerSystem = require('./core/hunger-system');
 const { loadPack } = require('./core/sprite-pack-loader');
+const { Journal } = require('./core/journal');
 const { minimizeByHwnd } = require('./monitor/minimize');
 
 // 小猫窗口尺寸(像素)
@@ -31,10 +32,13 @@ let gitWatchers = []; // GitWatcher 实例数组(支持多 repo)
 let hunger = null;    // HungerSystem 实例
 let decayTimer = null; // 每分钟 -1 的定时器
 let appConfig = null; // 加载后的配置
+let journal = null; // v0.2.1:持久化事件日志 + streak
+let streakTimer = null; // 每分钟刷一次 streak 显示(跨午夜也能正确)
 let activePack = null; // v0.2 P1:当前激活的 sprite pack({ manifest, imageUrls, packDir })
 let hatchWindow = null; // v0.2 P2:Hatch 窗口
 let petsListWindow = null; // v0.2 P3:Pets 列表窗口
 let whitelistWindow = null; // v0.2.1:白名单可视化窗口
+let diaryWindow = null; // v0.2.1:Diary 窗口
 let tray = null; // v0.2.1:系统托盘(后台 pet 资格证)
 let isQuitting = false; // 用户主动 Quit 才真退出;否则窗口关也维持后台
 let returnToIdleTimer = null; // 吃完几秒后回 idle 的定时器
@@ -344,7 +348,10 @@ function createCatWindow() {
   catWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   // pack 下发(renderer 收到后才注入 sprite CSS 并启动入场动画)
-  catWindow.webContents.once('did-finish-load', sendPackToRenderer);
+  catWindow.webContents.once('did-finish-load', () => {
+    sendPackToRenderer();
+    pushStreakToRenderer();
+  });
 
   catWindow.once('ready-to-show', () => {
     // --hidden 标志:auto-start 走的路径,只露托盘,不弹猫;
@@ -609,6 +616,7 @@ function startTransientState(state, durationMs) {
 function triggerEat({ processName, processPath, title, hwnd }) {
   // v0.2.1:不管 passive 与否,先记进 recentAttacks — 让白名单 UI 总能看到"想加的"
   rememberAttack(processName);
+  if (journal) journal.logAttack({ app: processName });
 
   // v0.1.2:passive 模式下完全跳过——给录屏 / 演示用
   if (appConfig?.monitor?.passive === true) {
@@ -634,7 +642,7 @@ function triggerEat({ processName, processPath, title, hwnd }) {
   startTransientState('attack', dur);
 }
 
-function triggerCommit({ sha, message }) {
+function triggerCommit({ sha, message, repo }) {
   const shortSha = (sha || '').substring(0, 7);
   const reward = appConfig?.hunger?.commitReward ?? 30;
   if (hunger) hunger.add(reward);
@@ -643,8 +651,18 @@ function triggerCommit({ sha, message }) {
     `[Committen] COMMIT sha=${shortSha} msg="${message}" reward=+${reward} hunger=${hunger?.value}`
   );
 
+  if (journal) {
+    journal.logCommit({ sha, message, repo });
+    pushStreakToRenderer();
+  }
+
   const dur = appConfig?.monitor?.eatDurationMs ?? 3000;
   startTransientState('eat', dur);
+}
+
+function pushStreakToRenderer() {
+  if (!catWindow || catWindow.isDestroyed() || !journal) return;
+  catWindow.webContents.send('cat:streak', journal.getDisplayStreak());
 }
 
 function startMonitor() {
@@ -927,6 +945,74 @@ ipcMain.handle('hatch:save', async (_e, { name, pngBuffer }) => {
     return { ok: false, error: e.message };
   }
 });
+
+// ==================== Diary (v0.2.1) ====================
+
+function createDiaryWindow() {
+  if (diaryWindow && !diaryWindow.isDestroyed()) {
+    diaryWindow.focus();
+    return;
+  }
+  diaryWindow = new BrowserWindow({
+    width: 560,
+    height: 680,
+    title: 'Diary · Committen',
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#1a1a1a',
+    webPreferences: {
+      preload: path.join(__dirname, 'renderer', 'diary', 'diary-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  diaryWindow.loadFile(path.join(__dirname, 'renderer', 'diary', 'diary.html'));
+  diaryWindow.on('closed', () => { diaryWindow = null; });
+}
+
+ipcMain.on('diary:open', createDiaryWindow);
+ipcMain.on('diary:close', () => {
+  if (diaryWindow && !diaryWindow.isDestroyed()) diaryWindow.close();
+});
+
+ipcMain.handle('diary:list', () => {
+  if (!journal) return { events: [], streak: { current: 0, longest: 0, broken: false } };
+  return {
+    events: journal.getRecentEvents(30),
+    streak: journal.getDisplayStreak(),
+  };
+});
+
+// 启动时若昨天有 ≥1 commit,弹一次 native notification("Welcome back")。
+// 仅每次 app 启动触发一次,不在长期运行中重复。
+function fireYesterdayToast() {
+  if (!journal) return;
+  const y = journal.getYesterdaySummary();
+  if (y.commits === 0 && y.attacks === 0) return;
+  if (!Notification.isSupported()) return;
+
+  const parts = [];
+  if (y.commits > 0) parts.push(`${y.commits} commit${y.commits === 1 ? '' : 's'} fed`);
+  if (y.attacks > 0) parts.push(`${y.attacks} pounce${y.attacks === 1 ? '' : 's'}`);
+  const s = journal.getDisplayStreak();
+  const streakLine = s.current > 0
+    ? `Streak: ${s.current} day${s.current === 1 ? '' : 's'}`
+    : (s.longest > 0 ? `Streak broken (best ${s.longest})` : '');
+
+  try {
+    const n = new Notification({
+      title: 'Welcome back · Committen',
+      body: [parts.join(' · '), streakLine].filter(Boolean).join('\n'),
+      silent: true,
+    });
+    n.on('click', () => createDiaryWindow());
+    n.show();
+  } catch (e) {
+    console.warn('[Committen] yesterday toast failed:', e.message);
+  }
+}
 
 // ==================== Whitelist UI (v0.2.1) ====================
 
@@ -1231,6 +1317,7 @@ function buildTrayMenu() {
     { label: 'Hatch from photo…', click: createHatchWindow },
     { label: 'Pets…', click: createPetsListWindow },
     { label: 'Whitelist…', click: createWhitelistWindow },
+    { label: 'Diary…', click: createDiaryWindow },
     { type: 'separator' },
     {
       label: 'Auto-start with Windows',
@@ -1283,11 +1370,21 @@ app.whenReady().then(() => {
   // pack 必须在 createCatWindow 之前加载,这样 did-finish-load 触发时就能立刻下发
   activePack = loadActivePack();
 
+  // v0.2.1:journal 在 catWindow 之前初始化,确保 pushStreakToRenderer 有源
+  journal = new Journal(path.join(app.getPath('userData'), 'journal.json'));
+  console.log(`[Committen] journal loaded: ${journal.events.length} events, streak ${journal.streak.current}/${journal.streak.longest} (last ${journal.streak.lastActiveDate || 'never'})`);
+
   createTray();           // 先建托盘,即使 catWindow 起不来,用户也有出口
   createCatWindow();
   startHunger();
   startMonitor();
   startGitWatcher();
+
+  // 每分钟重推一次 streak — 跨午夜或长时间无 commit 时让 UI 反映 broken 状态
+  streakTimer = setInterval(pushStreakToRenderer, 60 * 1000);
+
+  // 启动两秒后弹"昨天总结"通知(给 ready-to-show + tray 一点缓冲,避免抢 focus)
+  setTimeout(fireYesterdayToast, 2000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

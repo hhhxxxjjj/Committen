@@ -260,6 +260,35 @@ body.cat-hunger-ready .cat-hunger {
   to   { filter: brightness(1.35); }
 }
 
+/* v0.2.1:streak 显示(血条正下方,1 行小字) */
+.cat-streak {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-family: ui-monospace, "Consolas", monospace;
+  color: rgba(255, 200, 110, 0.92);  /* 暖金色,跟 hunger fill 的 normal 区分开 */
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1px 7px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  pointer-events: none;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+body.cat--intro .cat-streak,
+body.cat-hunger-ready .cat-streak {
+  opacity: 1;
+}
+
+.cat-streak.is-broken {
+  color: rgba(190, 190, 190, 0.75);
+}
+
 /* +30 / -10 这种数值变化的浮字反馈 */
 .cat-hunger-popup {
   position: absolute;
