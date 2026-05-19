@@ -31,34 +31,17 @@
     <!-- 唯一可见按钮:settings 齿轮(右上) -->
     <button class="cat-ctrl cat-ctrl--menu" id="btnMenu" title="Menu">⚙</button>
 
-    <!-- 弹出菜单(默认隐藏) -->
+    <!-- 弹出菜单(默认隐藏)。v0.2.1+:剥离 emoji,纯文本菜单 -->
     <div class="cat-menu" id="catMenu" hidden>
-      <button class="cat-menu-item" id="menuHatch">
-        <span class="cat-menu-icon">🥚</span>
-        <span>Hatch from photo…</span>
-      </button>
-      <button class="cat-menu-item" id="menuPets">
-        <span class="cat-menu-icon">🐾</span>
-        <span>Pets…</span>
-      </button>
+      <button class="cat-menu-item" id="menuHatch">Hatch from photo…</button>
+      <button class="cat-menu-item" id="menuPets">Pets…</button>
       <div class="cat-menu-divider"></div>
-      <button class="cat-menu-item" id="menuHide" title="Use the tray icon to show her again">
-        <span class="cat-menu-icon">👁</span>
-        <span>Hide cat</span>
-      </button>
-      <button class="cat-menu-item" id="menuReset">
-        <span class="cat-menu-icon">⌂</span>
-        <span>Reset position</span>
-      </button>
-      <button class="cat-menu-item" id="menuConfig">
-        <span class="cat-menu-icon">📝</span>
-        <span>Open config</span>
-      </button>
+      <button class="cat-menu-item" id="menuWhitelist">Whitelist…</button>
+      <button class="cat-menu-item" id="menuHide" title="Use the tray icon to show her again">Hide cat</button>
+      <button class="cat-menu-item" id="menuReset">Reset position</button>
+      <button class="cat-menu-item" id="menuConfig">Open config…</button>
       <div class="cat-menu-divider"></div>
-      <button class="cat-menu-item cat-menu-item--danger" id="menuQuit">
-        <span class="cat-menu-icon">✕</span>
-        <span>Quit Committen</span>
-      </button>
+      <button class="cat-menu-item cat-menu-item--danger" id="menuQuit">Quit Committen</button>
     </div>
   </div>
 

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self';" />
+  <title>Whitelist · Committen</title>
+  <link rel="stylesheet" href="./whitelist.css" />
+</head>
+<body>
+  <header>
+    <h1>Whitelist</h1>
+    <p class="subtitle">
+      Apps on the whitelist don't trigger an attack.
+      <strong>Recently attacked</strong> lists what's been pounced this session —
+      add with one click, no need to look up exe names.
+    </p>
+  </header>
+
+  <section class="panel">
+    <h2>Recently attacked</h2>
+    <ul id="recent-list" class="entry-list"></ul>
+    <p id="recent-empty" class="hint" hidden>
+      No attacks recorded yet this session. Open a non-whitelisted app to see it here.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>Add manually</h2>
+    <div class="add-row">
+      <input type="text" id="manual-input" placeholder="e.g. Spotify.exe" maxlength="64" />
+      <button id="manual-btn" type="button">Add</button>
+    </div>
+    <p class="hint">
+      Process name or display name both work; case-insensitive. On Windows some
+      apps report their display name instead of the .exe filename — adding both
+      forms is the safest bet.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>Your additions <span id="user-count" class="count">0</span></h2>
+    <ul id="user-list" class="entry-list"></ul>
+    <p id="user-empty" class="hint" hidden>You haven't added anything yet.</p>
+  </section>
+
+  <section class="panel">
+    <button id="defaults-toggle" type="button" class="toggle">
+      <span id="defaults-caret">▸</span>
+      Default whitelist <span id="defaults-count" class="count">0</span>
+    </button>
+    <ul id="defaults-list" class="entry-list" hidden></ul>
+    <p class="hint defaults-hint" hidden id="defaults-hint">
+      Defaults can't be removed in this alpha (v0.2.2 will add an exclude option).
+    </p>
+  </section>
+
+  <footer class="actions">
+    <button id="close-btn" type="button" class="btn-ghost">Close</button>
+  </footer>
+
+  <script src="./whitelist.js"></script>
+</body>
+</html>

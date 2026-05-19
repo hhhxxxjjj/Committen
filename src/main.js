@@ -34,9 +34,14 @@ let appConfig = null; // 加载后的配置
 let activePack = null; // v0.2 P1:当前激活的 sprite pack({ manifest, imageUrls, packDir })
 let hatchWindow = null; // v0.2 P2:Hatch 窗口
 let petsListWindow = null; // v0.2 P3:Pets 列表窗口
+let whitelistWindow = null; // v0.2.1:白名单可视化窗口
 let tray = null; // v0.2.1:系统托盘(后台 pet 资格证)
 let isQuitting = false; // 用户主动 Quit 才真退出;否则窗口关也维持后台
 let returnToIdleTimer = null; // 吃完几秒后回 idle 的定时器
+
+// v0.2.1:最近被扑过的非白名单 app,白名单 UI 用作"一键加"建议(rolling buffer)
+const RECENT_ATTACKS_MAX = 20;
+const recentAttacks = []; // [{ name, lastWhen }]
 let currentSpriteState = 'idle'; // 主进程持有的"猫当前 sprite 状态"
 let inTransientState = false;    // 是否在 eat 等临时状态中(不被 hunger 自动覆盖)
 let roamTimer = null;            // walk 状态下推动窗口位移的定时器
@@ -602,6 +607,9 @@ function startTransientState(state, durationMs) {
 // 函数名 triggerEat 是历史遗留:原本所有触发都用 eat 状态。
 // 现在分了:窗口入侵 → attack 状态(扑爪);git commit → eat 状态(真吃)
 function triggerEat({ processName, processPath, title, hwnd }) {
+  // v0.2.1:不管 passive 与否,先记进 recentAttacks — 让白名单 UI 总能看到"想加的"
+  rememberAttack(processName);
+
   // v0.1.2:passive 模式下完全跳过——给录屏 / 演示用
   if (appConfig?.monitor?.passive === true) {
     console.log(`[Committen] passive mode, skipping attack on "${processName}"`);
@@ -920,6 +928,117 @@ ipcMain.handle('hatch:save', async (_e, { name, pngBuffer }) => {
   }
 });
 
+// ==================== Whitelist UI (v0.2.1) ====================
+
+function rememberAttack(name) {
+  if (!name) return;
+  const idx = recentAttacks.findIndex((a) => a.name === name);
+  if (idx >= 0) recentAttacks.splice(idx, 1);
+  recentAttacks.unshift({ name, lastWhen: Date.now() });
+  if (recentAttacks.length > RECENT_ATTACKS_MAX) {
+    recentAttacks.length = RECENT_ATTACKS_MAX;
+  }
+}
+
+function createWhitelistWindow() {
+  if (whitelistWindow && !whitelistWindow.isDestroyed()) {
+    whitelistWindow.focus();
+    return;
+  }
+  whitelistWindow = new BrowserWindow({
+    width: 600,
+    height: 720,
+    title: 'Whitelist · Committen',
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#1a1a1a',
+    webPreferences: {
+      preload: path.join(__dirname, 'renderer', 'whitelist', 'whitelist-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  whitelistWindow.loadFile(path.join(__dirname, 'renderer', 'whitelist', 'whitelist.html'));
+  whitelistWindow.on('closed', () => { whitelistWindow = null; });
+}
+
+// 读 user config.json 的 whitelist 原始数组(未与 defaults union)。
+// 给 add/remove 用,这样我们写回的就是用户那一份,不污染 defaults。
+function readUserWhitelistRaw() {
+  try {
+    const raw = fs.readFileSync(getUserConfigPath(), 'utf-8');
+    const cfg = JSON.parse(raw);
+    return Array.isArray(cfg.whitelist) ? cfg.whitelist.filter((s) => typeof s === 'string') : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+ipcMain.on('whitelist:open', createWhitelistWindow);
+ipcMain.on('whitelist:close', () => {
+  if (whitelistWindow && !whitelistWindow.isDestroyed()) whitelistWindow.close();
+});
+
+ipcMain.handle('whitelist:list', () => {
+  const defaults = DEFAULT_CONFIG.whitelist || [];
+  const defaultsLower = new Set(defaults.map((s) => s.toLowerCase()));
+  const userRaw = readUserWhitelistRaw();
+
+  // "Your additions":过滤掉跟 defaults 重复的项,只显示真·用户添加
+  const user = userRaw.filter((e) => !defaultsLower.has(e.toLowerCase()));
+
+  // "Recently attacked":过滤掉已经在 union 后白名单里的(防止显示无意义建议)
+  const unionLower = new Set([...defaults, ...userRaw].map((s) => s.toLowerCase()));
+  const recent = recentAttacks.filter((a) => !unionLower.has(a.name.toLowerCase()));
+
+  return { recent, user, defaults };
+});
+
+ipcMain.handle('whitelist:add', (_e, name) => {
+  if (typeof name !== 'string') return { ok: false, error: 'invalid' };
+  const trimmed = name.trim().slice(0, 64);
+  if (!trimmed) return { ok: false, error: 'empty' };
+
+  const defaults = DEFAULT_CONFIG.whitelist || [];
+  if (defaults.some((d) => d.toLowerCase() === trimmed.toLowerCase())) {
+    return { ok: true, alreadyDefault: true };
+  }
+
+  const userRaw = readUserWhitelistRaw();
+  if (userRaw.some((e) => e.toLowerCase() === trimmed.toLowerCase())) {
+    return { ok: true, alreadyUser: true };
+  }
+
+  userRaw.push(trimmed);
+  updateConfigField('whitelist', userRaw);
+
+  // Live-reload:不需要重启 app
+  appConfig = loadConfig();
+  if (monitor) monitor.setWhitelist(appConfig.whitelist);
+  console.log(`[Committen] whitelist +"${trimmed}" (live)`);
+  return { ok: true };
+});
+
+ipcMain.handle('whitelist:remove', (_e, name) => {
+  if (typeof name !== 'string') return { ok: false, error: 'invalid' };
+  const trimmed = name.trim();
+
+  const userRaw = readUserWhitelistRaw();
+  const filtered = userRaw.filter((e) => e.toLowerCase() !== trimmed.toLowerCase());
+  if (filtered.length === userRaw.length) {
+    // 不在 user list 里 = 是默认项,v0.2-alpha 不支持删默认
+    return { ok: false, error: 'cannot-remove-default' };
+  }
+
+  updateConfigField('whitelist', filtered);
+  appConfig = loadConfig();
+  if (monitor) monitor.setWhitelist(appConfig.whitelist);
+  console.log(`[Committen] whitelist -"${trimmed}" (live)`);
+  return { ok: true };
+});
+
 // ==================== Pets list / 切换 (v0.2 P3) ====================
 
 function createPetsListWindow() {
@@ -1111,6 +1230,7 @@ function buildTrayMenu() {
     { type: 'separator' },
     { label: 'Hatch from photo…', click: createHatchWindow },
     { label: 'Pets…', click: createPetsListWindow },
+    { label: 'Whitelist…', click: createWhitelistWindow },
     { type: 'separator' },
     {
       label: 'Auto-start with Windows',

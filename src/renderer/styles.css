@@ -401,15 +401,14 @@ body.cat--intro .cat-ctrl {
 }
 
 .cat-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: block;
   width: 100%;
-  padding: 5px 10px;       /* v0.2.1:7→5,留点纵向空间给 Hide 这条新增项 */
+  padding: 6px 14px;       /* v0.2.1+:剥离 emoji 后纯文本,左右多留点呼吸 */
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.92);
   font-size: 12px;
+  line-height: 1.4;
   text-align: left;
   cursor: pointer;
   border-radius: 5px;
@@ -423,13 +422,6 @@ body.cat--intro .cat-ctrl {
 
 .cat-menu-item--danger { color: rgba(255, 130, 130, 0.95); }
 .cat-menu-item--danger:hover { background: rgba(220, 60, 60, 0.18); }
-
-.cat-menu-icon {
-  display: inline-block;
-  width: 16px;
-  text-align: center;
-  font-size: 12px;
-}
 
 .cat-menu-divider {
   height: 1px;

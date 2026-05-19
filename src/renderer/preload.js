@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld('committen', {
   // v0.2 P3:打开 Pets 列表窗口
   openPetsList: () => ipcRenderer.send('pets:open'),
 
+  // v0.2.1:打开白名单 UI
+  openWhitelist: () => ipcRenderer.send('whitelist:open'),
+
   // 主进程通知 renderer 切 sprite 状态(idle / walk / eat)
   onSetState: (callback) => {
     ipcRenderer.on('cat:set-state', (_e, state) => callback(state));

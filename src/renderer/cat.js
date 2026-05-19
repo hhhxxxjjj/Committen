@@ -12,6 +12,7 @@
   const menuEl = document.getElementById('catMenu');
   const menuHatch = document.getElementById('menuHatch');
   const menuPets = document.getElementById('menuPets');
+  const menuWhitelist = document.getElementById('menuWhitelist');
   const menuHide = document.getElementById('menuHide');
   const menuReset = document.getElementById('menuReset');
   const menuConfig = document.getElementById('menuConfig');
@@ -282,6 +283,11 @@
 
   menuPets.addEventListener('click', () => {
     window.committen.openPetsList();
+    closeMenu();
+  });
+
+  menuWhitelist.addEventListener('click', () => {
+    window.committen.openWhitelist();
     closeMenu();
   });
 
